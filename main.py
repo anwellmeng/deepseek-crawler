@@ -2,7 +2,7 @@ import asyncio
 import re
 import csv
 import os.path
-from crawl4ai import AsyncWebCrawler
+from crawl4ai import AsyncWebCrawler, AdaptiveCrawler, AdaptiveConfig
 from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
 from crawl4ai.deep_crawling import BestFirstCrawlingStrategy
 from crawl4ai.deep_crawling.scorers import KeywordRelevanceScorer
@@ -15,7 +15,12 @@ async def main():
         keywords=["contact","email"],
         weight=0.8
     )
-
+    """
+    adaptive_config = AdaptiveConfig(
+        max_pages = 5
+        top_k_links = 3
+    )
+    """
     run_config = CrawlerRunConfig( # Run Configuration (Custom)
         deep_crawl_strategy=BestFirstCrawlingStrategy(
             max_depth=1,
@@ -25,7 +30,7 @@ async def main():
         markdown_generator = DefaultMarkdownGenerator()
     )
     directory = './scraped_sites'
-    # Read the CSV file
+    # READ CSV FILE
     websites = []
     try:
         with open('authors.csv', 'r') as csvfile:
@@ -48,40 +53,37 @@ async def main():
     async with AsyncWebCrawler(config=browser_config) as crawler:
         for url in websites:
             try:
-                # Create a safe filename for the URL
-                safe_name = re.sub(r"\W+", '_', url).strip("_")
-                os.makedirs(directory, exist_ok=True)
-                file_path = os.path.join(directory, f"{safe_name}.md")
-
-                if os.path.exists(file_path):
-                    print(f"File for {url} already exists, skipping this one and moving on...")
-                    continue
-
-                # Now, crawl the URL
+                # START CRAWLING
                 result = await crawler.arun(
                     url=url,
                     config=run_config
                 )
-                markdown = None
+                base = re.sub(r"\W+", "_", url.rstrip("/")).strip("_")
 
                 if isinstance(result, list):
+                    combined_markdown = ""
                     for item in result:
-                        if item.success:
-                            markdown = item.markdown
-                            break
-                elif result.success:
-                    markdown = result.markdown
-
-                if markdown:
-                    with open(file_path, "w") as f:
-                        f.write(markdown)
-                    print(f"Saved {url} to {safe_name}.md")
+                        if getattr(item, "success", False):
+                            if combined_markdown:
+                                combined_markdown += "\n\n--- PAGE BREAK ---\n\n"
+                            combined_markdown += item.markdown
+                    if combined_markdown:
+                        file_path = os.path.join(directory, f"{base}.md")
+                        try:
+                            with open(file_path, "x") as f:
+                                f.write(combined_markdown)
+                            print(f"Saved combined markdown for {url} to {base}.md")
+                        except FileExistsError:
+                            print(f"File {base}.md already exists, skipping.")
                 else:
-                    print(f"Failed to crawl {url} or other.")
+                    if getattr(result, "success", False):
+                        file_path = os.path.join(directory, f"{base}_p1.md")
+                        with open(file_path, "x") as f:
+                            f.write(result.markdown)
+                        print(f"Saved {url} to {base}_p1.md")
             except FileExistsError:
                 print(f"File for {url} already exists, skipping this one and moving on...")
                 continue
-
 
 if __name__ == "__main__":
     asyncio.run(main())
