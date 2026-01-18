@@ -1,108 +1,62 @@
-from __future__ import annotations
-
-import asyncio
-import csv
-import re
-from pathlib import Path
-
-from crawl4ai import AsyncWebCrawler
+import asyncio, csv
+from crawl4ai import AsyncWebCrawler, DefaultMarkdownGenerator
 from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
 from crawl4ai.deep_crawling import BestFirstCrawlingStrategy
 from crawl4ai.deep_crawling.scorers import KeywordRelevanceScorer
-from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
-
-from .config import AUTHORS_CSV, SCRAPED_SITES_DIR
-
-def load_websites(csv_path: Path) -> list[str]:
-    websites: list[str] = []
-    with csv_path.open(newline="") as csvfile:
-        reader = csv.reader(csvfile)
-        for row in reader:
-            if reader.line_num == 1:
-                continue
-            if not row:
-                continue
-            websites.append(row[0])
-    return websites
 
 
-async def run_crawl(websites: list[str], output_dir: Path) -> None:
-    browser_config = BrowserConfig()  # Default browser configuration
 
-    keyword_scorer = KeywordRelevanceScorer( 
-        keywords=["contact","email"],
-        weight=0.8
-    )
-    """
-    adaptive_config = AdaptiveConfig(
-        max_pages = 5
-        top_k_links = 3
-    )
-    """
-    run_config = CrawlerRunConfig( # Run Configuration (Custom)
-        deep_crawl_strategy=BestFirstCrawlingStrategy(
-            max_depth=1,
-            include_external=False,
-            url_scorer=keyword_scorer
-        ),
-        markdown_generator = DefaultMarkdownGenerator()
-    )
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        for url in websites:
-            try:
-                # START CRAWLING
-                result = await crawler.arun(
-                    url=url,
-                    config=run_config
-                )
-                base = re.sub(r"\W+", "_", url.rstrip("/")).strip("_")
-
-                if isinstance(result, list):
-                    combined_markdown = ""
-                    for item in result:
-                        if getattr(item, "success", False):
-                            if combined_markdown:
-                                combined_markdown += "\n\n--- PAGE BREAK ---\n\n"
-                            combined_markdown += item.markdown
-                    if combined_markdown:
-                        file_path = output_dir / f"{base}.md"
-                        try:
-                            with file_path.open("x", encoding="utf-8") as f:
-                                f.write(combined_markdown)
-                            print(f"Saved combined markdown for {url} to {base}.md")
-                        except FileExistsError:
-                            print(f"File {base}.md already exists, skipping.")
-                else:
-                    if getattr(result, "success", False):
-                        file_path = output_dir / f"{base}_p1.md"
-                        with file_path.open("x", encoding="utf-8") as f:
-                            f.write(result.markdown)
-                        print(f"Saved {url} to {base}_p1.md")
-            except FileExistsError:
-                print(f"File for {url} already exists, skipping this one and moving on...")
-                continue
-
-
-def main() -> int:
-    if not AUTHORS_CSV.exists():
-        print("Error: CSV file not found")
-        return 1
-
+async def main():
+    urls = []
     try:
-        websites = load_websites(AUTHORS_CSV)
-    except OSError as exc:
-        print(f"Error reading CSV: {exc}")
-        return 1
+        with open('authors.csv', 'r') as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                if row and row[0].strip():
+                    urls.append(row[0].strip())
+    except FileNotFoundError:
+        print(f"Error: CSV file not found")
+    print(f"{len(urls)} urls loaded.")  
 
-    if not websites:
-        print("No websites to crawl")
-        return 0
-
-    asyncio.run(run_crawl(websites, SCRAPED_SITES_DIR))
-    return 0
+    n = 0
+    browser_config = BrowserConfig()
+    async with AsyncWebCrawler(config=browser_config) as crawler:
+        for link in urls:
+            keyword_scorer = KeywordRelevanceScorer( 
+                    keywords=["contact","email"],
+                    weight=0.8
+            )
+            run_config = CrawlerRunConfig( # Run Configuration (Custom)
+                    deep_crawl_strategy=BestFirstCrawlingStrategy(
+                        max_depth=2,
+                        include_external=False,
+                        url_scorer=keyword_scorer,
+                        max_pages=8
+                    ),
+                    markdown_generator = DefaultMarkdownGenerator()
+            )
+            output_file = f'{n}.md'
+            combined_md = ""
+            try:
+                results = await crawler.arun(link, config=run_config)
+                print(link, "results:", type(results), "len:", len(results))
+                for result in results:    
+                    if result.success:
+                        combined_md += f"\n\n{result.markdown}"
+                        print("Found subpage.")
+                    else:
+                        print("Error:", result.error_message)
+                        continue
+                try:
+                    with open(output_file, "w", encoding="utf-8") as f:
+                        f.write(combined_md)
+                        print(f"Successfully saved {link} to {output_file}")
+                        n=n+1
+                except OSError as e:
+                    print(f"Failed to write file: {e}")
+            except Exception as e:
+                print("Error in crawler.arun", repr(e))
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    asyncio.run(main())
