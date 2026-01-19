@@ -8,8 +8,7 @@ from config import(
     SCRAPED_SITES_DIR
 )
 
-
-async def main():
+async def crawl_authors():
     urls = []
     try:
         with open(AUTHORS_CSV, 'r') as csvfile:
@@ -25,11 +24,12 @@ async def main():
     browser_config = BrowserConfig()
     async with AsyncWebCrawler(config=browser_config) as crawler:
         for link in urls:
+            # Configurations
             keyword_scorer = KeywordRelevanceScorer( 
                     keywords=["contact","email"],
-                    weight=0.8
+                    weight=0.7
             )
-            run_config = CrawlerRunConfig( # Run Configuration (Custom)
+            run_config = CrawlerRunConfig(
                     deep_crawl_strategy=BestFirstCrawlingStrategy(
                         max_depth=2,
                         include_external=False,
@@ -38,6 +38,7 @@ async def main():
                     ),
                     markdown_generator = DefaultMarkdownGenerator()
             )
+
             output_file = f'{n}.md'
             combined_md = ""
             try:
@@ -48,7 +49,7 @@ async def main():
                         combined_md += f"\n\n{result.markdown}"
                         print("Found subpage.")
                     else:
-                        print("Error:", result.error_message)
+                        print("ERROR:", result.error_message)
                         continue
                 try:
                     with open(SCRAPED_SITES_DIR / output_file, "w", encoding="utf-8") as f:
@@ -58,7 +59,11 @@ async def main():
                 except OSError as e:
                     print(f"Failed to write file: {e}")
             except Exception as e:
-                print("Error in crawler.arun", repr(e))
+                print("Error during crawler.arun", repr(e))
+
+                
+async def main():
+    crawl_authors()
 
 
 if __name__ == "__main__":

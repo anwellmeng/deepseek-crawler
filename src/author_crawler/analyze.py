@@ -1,4 +1,14 @@
-from __future__ import annotations
+import os
+import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+load_dotenv(PROJECT_ROOT / ".env")
 
 import json
 import os
@@ -7,13 +17,14 @@ from pathlib import Path
 
 from openai import OpenAI
 
-from .config import (
+
+from src.author_crawler.config import (
     FAILED_JSONS_DIR,
     FINISHED_SITES_DIR,
     JSONS_DIR,
     LOGS_DIR,
     SKIPPED_SITES_DIR,
-    TO_ANALYZE_DIR,
+    SCRAPED_SITES_DIR,
 )
 
 SYSTEM_PROMPT = """You extract contact info from scraped author-website Markdown.
@@ -88,7 +99,7 @@ def get_client() -> OpenAI:
 
 def configure_logging() -> None:
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    log_path = LOGS_DIR / "run_log.txt"
+    log_path = LOGS_DIR / "run.log"
     sys.stdout = log_path.open("a", encoding="utf-8")
     sys.stderr = sys.stdout
     print("\n--- New run started ---")
@@ -106,7 +117,7 @@ def process_file(file: Path, client: OpenAI) -> None:
         return
 
     completion = client.chat.completions.create(
-        model="meituan/longcat-flash-chat:free",
+        model="openai/gpt-oss-20b:free",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": md},
@@ -132,11 +143,7 @@ def process_file(file: Path, client: OpenAI) -> None:
     print(f"Moved to finished_sites: {finished_path}")
 
 
-def main() -> int:
-    if not TO_ANALYZE_DIR.exists():
-        print(f"Error: {TO_ANALYZE_DIR} directory not found")
-        return 1
-
+def analyze():
     try:
         client = get_client()
     except RuntimeError as exc:
@@ -145,11 +152,11 @@ def main() -> int:
 
     configure_logging()
 
-    for file in TO_ANALYZE_DIR.glob("*.md"):
+    for file in SCRAPED_SITES_DIR.glob("*.md"):
         process_file(file, client)
 
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    analyze()
