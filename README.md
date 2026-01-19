@@ -22,30 +22,29 @@ README.md              # Project overview and usage
 requirements.txt       # Python dependencies
 author_crawler/          # Core library
     __init__.py
-    analyze.py            # Uses an LLM to parse scraped Markdown
+    analyze.py            # Uses an LLM to parse scraped Markdown and convert to JSON
     crawl.py              # Crawls websites and saves Markdown
     export.py             # Converts JSON results to a CSV
     config.py             # Shared paths and constants
 scripts/
-    crawl.py              # CLI wrapper for crawling
-    analyze.py            # CLI wrapper for analysis
-    export_csv.py         # CLI wrapper for exporting
+    crawl.py              # TO BE UPDATED
+    analyze.py            # TO BE UPDATED
+    export_csv.py         # TO BE UPDATED
 data/
     inputs/
-        authors.csv       # CSV of author URLs
+        authors.csv       # CSV of URLs
     outputs/
-        jsons/            # Raw JSON from OpenAI
+        jsons/            # Raw JSON from LLM
         processed_jsons/  # Moved after export
-        authors_contacts.csv  # Final CSV
+        export.csv        # Final CSV
         skipped_sites/    # Moved if markdown file is too large
         failed_jsons/     # Any sites that couldn't be scanned
 ```
 
 ## Prerequisites
-* **Python 3.11+** – The code uses type annotations and modern syntax.
+* **Python 3.11+** 
 * **API key**
   * Default: set the environment variable `OPENROUTER_API_KEY` (OpenRouter).
-  * Optional: set `OPENAI_API_KEY` and configure the code to use OpenAI’s endpoint instead.
 * **Python packages** – Install the dependencies:
 
 ```bash
